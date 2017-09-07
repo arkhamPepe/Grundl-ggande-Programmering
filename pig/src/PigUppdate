@@ -1,0 +1,404 @@
+import java.util.Random;
+import java.util.Scanner;
+
+import static java.lang.System.*;
+
+/*
+* The Pig game
+* See http://en.wikipedia.org/wiki/Pig_%28dice_game%29
+*/
+public class pig {
+
+    public static void main(String[] args) {
+        new pig().program();
+    }
+
+    // The only allowed instance variables (i.e. declared outside any method)
+    // Accessible from any method
+    final Scanner sc = new Scanner(in);
+    final Random rand = new Random();
+
+    void test() {
+
+        //getPlayers(); //testing player creation, bad inputs etc.
+        out.println(playerChoice(new Player()));
+
+        exit(0);   // End program
+    }
+
+    void program() {
+        // -Initialisation of variables to be used-
+        //test();
+        int winPts;                 // Points to win
+        Player[] players;           // The players (array of Player objects)
+        boolean aborted = false;    // Game aborted by player
+        int playerTurn = 0;         // Decides whose turn it is
+        boolean nextTurn;           // If true then switches player
+        boolean won = false;        // Set true if someone wins and exits the game
+        boolean playVSComp;         // Enables/disables the playing against the computer
+
+        // Creates a computer and gives it a name, does this always whether the computer is used or not
+        Computer cp = new Computer();
+        cp.name = "Computer";
+
+        // -Initialisation of game-
+        winPts = getWinPts();
+        welcomeMsg(winPts);
+        playVSComp = gameModeSelect(); // Player selects the gamemode (VS computer or not)
+        players = getPlayers();
+
+
+        // -Start of game-
+        while (!won && !aborted)
+        {
+            // Each player's total points is listed.
+            statusMsg(players, playVSComp, cp);
+            nextTurn = false; // True --> the next player gets to play. | False --> the current player keeps playing.
+
+            // So long as current player has not chosen to "hold" or rolled a 1, this keeps running.
+
+            //while(!playerChoice(players[playerTurn])
+            //loop withing playerChoice return true until the player wants/has to pass it's turn
+
+            while (!nextTurn)
+            { // Player chooses whether to roll dice, hold or quit the game entirely.
+                String choice = playerChoice(players[playerTurn]).toLowerCase();
+                switch (choice)
+                {
+                    case "r":
+                        nextTurn = playerRoll(players[playerTurn]);
+                        out.println(players[playerTurn].name + " rolled a " + players[playerTurn].diceRoll + ", <Round points: "
+                                + players[playerTurn].roundPts + "> <Total points: " + players[playerTurn].totalPts + ">");
+                        break;
+                    case "n":
+                        out.println(players[playerTurn].name + " decided to hold; points: " + players[playerTurn].roundPts);
+                        playerHold(players[playerTurn]);
+                        nextTurn = true; // Break out of loop
+                        break;
+                    case "q":
+                        aborted = true;
+                        nextTurn = true;
+                        break;
+                    default:
+                        out.println("That's not a valid option");
+                        break;
+                }
+            } // End of while
+
+            if (checkWin(players[playerTurn], winPts)) // Checks if someone has won
+            {
+                playVSComp = false; // Makes it so that the computer can't take it's turn if it happens to be the last players turn
+                won = true;
+            }
+            // Above the human turns
+
+            // Below computer takes it's turns, if enabled
+            if (playVSComp && playerTurn + 1 == players.length && !aborted)
+            {
+                System.out.println();
+                cp.wantRoll = cp.compChoice(getLeaderPts(players));
+                while (cp.wantRoll && cp.canRoll)
+                {
+                    cp.canRoll = cp.compRoll();
+                    cp.wantRoll = cp.compChoice(getLeaderPts(players));
+                    sc.nextLine();
+                    if (!cp.wantRoll)
+                    {
+                        cp.compHold();
+                    }
+                }
+                cp.canRoll = true;
+                won = cp.totalPts >= winPts;
+                cp.cpuWin = won;
+            }
+            // Next player's turn
+            playerTurn++;
+            playerTurn = playerTurn % players.length;
+        } // End of while
+
+
+        // -End of game-
+        if (aborted)
+        {
+            abortedMessage();
+        }
+        else if (cp.cpuWin)
+        {
+            computerWinMsg(cp);
+        }
+        else {
+            if (playerTurn == 0) {
+                playerTurn = players.length;
+            }
+            playerWinMsg(players[playerTurn - 1]);
+        }
+
+    }
+
+    // ---- Game logic methods -----------------
+
+    // Player chooses to hold.
+    void playerHold(Player p)
+    {
+        p.totalPts += p.roundPts;
+        p.roundPts = 0;
+    }
+
+    // Player rolls the dice.
+    boolean playerRoll(Player p)
+    {
+        p.diceRoll = diceToss();
+        if (p.diceRoll == 1)
+        {
+            p.roundPts = 0;
+            return true;
+        }
+        else
+        {
+            p.roundPts += p.diceRoll;
+            return false;
+        }
+    }
+
+    // Player will win with enough points
+    boolean checkWin(Player p, int winPoints)
+    {
+        if (p.totalPts >= winPoints)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    // Tosses a 6 sided die and returns it's value
+    int diceToss()
+    {
+        return rand.nextInt(6) + 1;
+    }
+
+    // Compares the players points and returns the highest
+    int getLeaderPts(Player[] p)
+    {
+        int leader = 0; // Highest current score
+
+        for (int i = 0; i < p.length; i++)
+        {
+            if (p[i].totalPts > leader)
+            {
+                leader = p[i].totalPts;
+            }
+        }
+        return leader;
+    }
+
+
+    // ---- IO methods -------------------------
+
+    // A method that lets you set the amount of points to win the game
+    int getWinPts()
+    {
+        out.println("Please input how many points you want the game to end at");
+        while (true){
+            if (sc.hasNextInt())
+            {
+                int temp = sc.nextInt();
+                sc.nextLine();
+                return temp;
+            }
+            badInput();
+        }
+    }
+
+    // For when the player makes a mistake
+    void badInput()
+    {
+        out.println("Bad input!");
+        sc.nextLine();
+    }
+
+    // Selects if you want to play vs a computer or not
+    boolean gameModeSelect()
+    {
+        String choice;
+        while (true) {
+            out.print("Do you wish to play VS the computer? (y / n) > ");
+            choice = sc.nextLine().toLowerCase();
+            switch (choice) {
+                case "y":
+                    return true;
+                case "n":
+                    return false;
+                default:
+                    out.println("That's not a valid option");
+            }
+        }
+    }
+
+    /*boolean playerChoice2(Player p)
+    {
+        out.print(p.name + " roll (r) or hold (n) > ");
+        switch (sc.nextLine().toLowerCase())
+        {
+            case "r":
+                playerRoll(p);
+                return true;
+            case "n":
+                playerHold(p);
+                return false; // Break out of loop
+            case "q":
+                p.aborted = true;
+                return false;
+            default:
+                out.println("That's not a valid option");
+                return false;
+        }
+    }*/
+
+
+    // Returns player choice
+    String playerChoice(Player p)
+    {
+        out.print(p.name + " roll (r) or hold (n) > ");
+        return sc.nextLine();
+    }
+
+    // Greets the players.
+    void welcomeMsg(int winPoints) {
+        out.println("Welcome to PIG!");
+        out.println("First player to get " + winPoints + " points will win!");
+        out.println("Commands are: r = roll , n = next, q = quit");
+        out.println();
+    }
+
+    // Show current points for all players
+    void statusMsg(Player[] players, boolean vsComp, Computer cp) {
+        out.println();
+        out.print("Points: ");
+        for (Player p : players) {
+            out.print(p.name + " = " + p.totalPts + " ");
+        }
+        if (vsComp)
+        {
+            out.print(cp.name + " = " + cp.totalPts + " ");
+        }
+        out.println();
+    }
+
+    // Creates the array of players that are used later
+    Player[] getPlayers() {
+
+        int nPlayers;
+        out.print("How many players? > ");
+        while (!sc.hasNextInt())
+        {
+            badInput();
+            out.println("Please input how many players are going to play > ");
+        }
+        nPlayers = sc.nextInt();
+        sc.nextLine(); // Empties scanner
+
+        // For when the player tries to be a smartass and break the game
+        if (nPlayers < 0)
+        {
+            nPlayers = -nPlayers;
+            out.println("Funny guy, we fixed it");
+        }
+        else if (nPlayers == 0)
+        {
+            out.println("Sorry but you actually have to play, even if you're alone");
+            nPlayers = 1;
+        }
+        else if (nPlayers > 8)
+        {
+            out.println("That seems a bit ridiculous no more than 8 players please");
+            nPlayers = 8;
+
+        }
+
+        // Initialize and give all players names
+        Player[] players = new Player[nPlayers];
+        for (int i = 0; i < nPlayers; i++){
+            players[i] = new Player();
+            out.println("Enter your name, player " + (i+1) + ": ");
+            players[i].name = sc.nextLine();
+        }
+        return players;
+    }
+
+    // Prints a game over message when a player wins
+    void playerWinMsg(Player p) {
+        out.println(p.name + " has won the game with a total of " + p.totalPts + " points!");
+    }
+
+    // A special game over message for when the computer wins
+    void computerWinMsg(Computer cp)
+    {
+        out.println("The computer has shown that AI is the best and won with " + cp.totalPts + " points!");
+    }
+
+    // Prints a "game aborted" message
+    void abortedMessage(){
+        out.println("The game has been TERMINATED!");
+    }
+
+    // ---------- Class -------------
+    // A class makes it possible to keep all data for a Player in one place
+    // Use the class to create (instantiate) Player objects
+    class Player {
+        String name;
+        int diceRoll;
+        int totalPts;    // Total points for all rounds, default 0
+        int roundPts;    // Points for a single round, default 0
+        //boolean aborted = false;
+    }
+
+    class Computer extends Player {
+
+
+        boolean canRoll = true; // Enables the computer to roll if it wants to
+        boolean wantRoll;       // Hold from a function that checks if the computer wants to roll
+        boolean cpuWin = false;     // Just tells you if the computer has won, since we coded so the player-->
+        // -->  whose turn it was obviously had the winning points, but with cpu we need a way to know if it won
+
+        // Decides if the computer "wants" to roll or not depending on the state of the game (roll if true, hold if false)
+        public boolean compChoice(int leader)
+        {
+            if (leader - this.totalPts > 10)
+            {
+                return this.roundPts < 16;
+            }
+            else {
+                return this.roundPts < 9;
+            }
+        }
+
+        // Computer rolls dice
+        public boolean compRoll()
+        {
+            int diceRoll = diceToss();
+
+            if (diceRoll == 1)
+            {
+                this.roundPts = 0;
+                out.print(this.name + " rolled a 1 and passes the turn...");
+                return false;
+
+            }
+            else
+            {
+                this.roundPts += diceRoll;
+                out.print(this.name + " rolled a " + diceRoll + ", <Round points: " + this.roundPts + "> <Total points: " + this.totalPts + ">");
+                return true;
+            }
+        }
+
+        // Method to let the computer accumulate points and let the player know it stopped rolling
+        public void compHold()
+        {
+            totalPts += roundPts;
+            System.out.println("The computer decided to stay and collect its points");
+            roundPts = 0;
+        }
+    }
+}
+
