@@ -1,0 +1,305 @@
+import javafx.animation.AnimationTimer;
+import javafx.application.Application;
+import javafx.scene.Group;
+import javafx.scene.Scene;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.paint.Color;
+import javafx.stage.Stage;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
+
+import static java.lang.Math.random;
+import static java.lang.Math.round;
+import static java.lang.Math.sqrt;
+import static java.lang.System.*;
+
+/*
+ *  Program to simulate segregation.
+ *  See : http://nifty.stanford.edu/2014/mccown-schelling-model-segregation/
+ *
+ * NOTE:
+ * - JavaFX first calls method init() and then method start() far below.
+ * - To test uncomment call to test() first in init() method!
+ *
+ */
+// Extends Application because of JavaFX (just accept for now)
+public class Neighbours extends Application {
+
+    // Enumeration type for the Actors
+    enum Actor {
+        BLUE, NONE, RED   // Type only has 3 values, NONEs are white
+    }
+
+    // Enumeration type for the state of an Actor
+    enum State {
+        UNSATISFIED,
+        NA,        // Not applicable (NA), used for NONEs
+        SATISFIED
+    }
+
+    // Below is the *only* accepted instance variable (i.e. variables outside any method)
+    // This variable is accessible from any method
+    Actor[][] world;              // The world is a square matrix of Actors
+
+    // This is the method called by the timer to update the world approx each 1/60 sec.
+    void updateWorld() {
+        // % of surrounding neighbours that are like me
+        final double threshold = 0.7;
+        State[][] states = new State[world.length][world.length];
+        loopSetCellState(threshold, states);
+        rearrangeCells(states);
+    }
+
+    // This method initializes the world variable with a random distribution of Actors
+    // Method automatically called by JavaFX runtime
+    // That's why we must have "@Override" and "public" (just accept for now)
+    @Override
+    public void init(){
+        //test();    // <---------------- Uncomment to TEST!
+
+        // %-distribution of RED, BLUE (and NONE)
+        double[] dist = {0.40, 0.40};
+        // Number of locations (places) in world (square)
+        int nLocations = 900;
+
+        world = generateDistribution(nLocations, dist);
+        randomDistribution(world);
+        updateWorld();
+    }
+
+    // Check if inside world
+    boolean isValidLocation(int size, int row, int col) {
+        return !(row == -1 || col == -1 || row == size || col == size);
+    }
+
+    double checkNeighbour(int row, int col, int i, int j){
+        if (isValidLocation(world.length, row + i, col + j)) {
+            if (i != 0 || j != 0) {
+                if ((world[row][col] == world[row + i][col + j]))
+                {
+                    return 1.0/8;
+                }
+            }
+        }
+        else{
+            return 1.0/8;
+        }
+        return 0;
+    }
+    
+    //TODO Move all pieces at once, randomize which ones move if too many want to move at once (not enough empty space)
+    //TODO %of neighbor of colour (ex if one is red and rest is white then % is 100% red so red is satisfied, 
+    //TODO blue is unsatisfied despite only one red)
+    // if (unsatisfied > NA) then randomize which unsatisfied gets to move
+    
+
+    void loopSetCellState(double th, State[][] states){
+        for (int row = 0; row < states.length; row++){
+            for (int col = 0; col < states.length; col++){
+                setCellState(th, states, row, col);
+            }
+        }
+    }
+
+    void setCellState(double th, State[][] states, int row, int col){
+        double curTh = 0;
+
+        if (world[row][col] == Actor.NONE){
+            states[row][col] = State.NA;
+        }
+        else {
+            for (int i = -1; i < 2; i++) {
+                for (int j = -1; j < 2; j++) {
+                    curTh += checkNeighbour(row, col, i, j);
+                }
+            }
+            if (curTh >= th) {
+                states[row][col] = State.SATISFIED;
+            } else {
+                states[row][col] = State.UNSATISFIED;
+            }
+        }
+    }
+
+    void rearrangeCells(State[][] states){
+        for (int row = 0; row < world.length; row++){
+            for (int col = 0; col < world.length; col++){
+                if (isValidLocation(world.length, row, col)){
+                    if (states[row][col] == State.UNSATISFIED){
+                        moveCell(states, row, col);
+                    }
+                }
+            }
+        }
+    }
+
+    void moveCell(State[][] states, int row, int col){
+        List<Integer> emptyCells = getEmptyCells(states);
+        Random rand = new Random();
+        int x = rand.nextInt(emptyCells.size()/2)*2;
+        states[emptyCells.get(x)][emptyCells.get(x + 1)] = State.SATISFIED;
+        states[row][col] = State.NA;
+        world[emptyCells.get(x)][emptyCells.get(x + 1)] = world[row][col];
+        world[row][col] = Actor.NONE;
+    }
+
+    List<Integer> getEmptyCells(State[][] states){
+        List<Integer> myList = new ArrayList<>();
+        for (int row = 0; row < states.length; row++){
+            for (int col = 0; col < states.length; col++){
+                if (states[row][col] == State.NA){
+                    myList.add(row);
+                    myList.add(col);
+                }
+            }
+        }
+        return myList;
+    }
+
+    // ----------- Utility methods -----------------
+
+
+    Actor[][] generateDistribution(int size, double[] dist){
+        int sizeY = (int) sqrt(size);
+        int sizeX = sizeY;
+        Actor[][] arr = new Actor[sizeX][sizeY];
+        int x = 0;
+        for (int i = 0; i < sizeX; i++){
+            for (int j = 0; j < sizeY; j++) {
+                if (x < sizeX * sizeY * dist[0]) {
+                    arr[i][j] = Actor.RED;
+                } else if (x < sizeX * sizeY * (dist[0] + dist[1])) {
+                    arr[i][j] = Actor.BLUE;
+                } else {
+                    arr[i][j] = Actor.NONE;
+                }
+                x++;
+            }
+        }
+        return arr;
+    }
+
+    Actor[][] randomDistribution(Actor[][] arr) {
+        int x, x1;
+        Actor y;
+        Random rand = new Random();
+        for (int i = 0; i < 25; i++){
+            for (int row = 0; row < arr.length; row++) {
+                for (int col = 0; col < arr[row].length; col++) {
+
+                    x = rand.nextInt(arr.length);
+                    x1 = rand.nextInt(arr[row].length);
+                    y = arr[row][col];
+                    arr[row][col] = arr[x][x1];
+                    arr[x][x1] = y;
+                }
+            }
+        }
+        return arr;
+    }
+
+    // TODO need any utilities add here (= methods possible reusable for other programs)
+
+    // ------- Testing -------------------------------------
+
+    // Here you run your tests i.e. call your logic methods
+    // to see that they really work
+    void test(){
+        // A small hard coded world for testing
+        world = new Actor[][]{
+                {Actor.RED, Actor.RED, Actor.RED},
+                {Actor.RED, Actor.BLUE, Actor.RED},
+                {Actor.RED, Actor.RED, Actor.BLUE}
+        };
+        double th = 0.5;   // Simple threshold used for testing
+
+        //world = generateDistribution(, 0.3, 0.3);
+        //randomDistribution(world);
+        //for (int i = 0; i < world.length; i++)
+        //System.out.println(Arrays.toString(world[i]));
+        State[][] states = new State[world.length][world.length];
+
+        for (int row = 0; row < world.length; row++) {
+            for (int col = 0; col < world.length; col++) {
+                setCellState(th, states, row, col);
+            }
+            out.println(Arrays.toString(states[row]));
+        }
+
+        // A first test!
+        //int s = world.length;
+        //out.println(isValidLocation(s, 0, 0));
+        //updateWorld();
+
+        /* Move of unsatisfied hard to test because of random */
+
+        exit(0);
+    }
+
+    // ---- NOTHING to do below this row, it's JavaFX stuff  ----
+
+    final int width = 400;   // Size for window
+    final int height = 400;
+    long previousTime = nanoTime();
+    final long INTERVAL = 450000000;
+
+    @Override
+    public void start(Stage primaryStage) throws Exception {
+
+        // Build a scene graph
+        Group root = new Group();
+        Canvas canvas = new Canvas(width, height);
+        root.getChildren().addAll(canvas);
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+
+        // Create a timer
+        AnimationTimer timer = new AnimationTimer() {
+            // This method called by FX, parameter is the current time
+            public void handle(long currentNanoTime) {
+                long elapsedNanos = currentNanoTime - previousTime;
+                if (elapsedNanos > INTERVAL) {
+                    updateWorld();
+                    renderWorld(gc);
+                    previousTime = currentNanoTime;
+                }
+            }
+        };
+
+        Scene scene = new Scene(root);
+        primaryStage.setScene(scene);
+        primaryStage.setTitle("Simulation");
+        primaryStage.show();
+
+        timer.start();  // Start simulation
+    }
+
+
+    // Render the state of the world to the screen
+    public void renderWorld(GraphicsContext g) {
+        g.clearRect(0,0, width, height);
+        int size = world.length;
+        for (int row = 0; row < size; row++) {
+            for (int col = 0; col < size; col++) {
+                int x = 10 * col + 50;
+                int y = 10 * row + 50;
+
+                if (world[row][col] == Actor.RED) {
+                    g.setFill(Color.RED);
+                } else if (world[row][col] == Actor.BLUE) {
+                    g.setFill(Color.BLUE);
+                } else {
+                    g.setFill(Color.WHITE);
+                }
+                g.fillOval(x, y, 10, 10);
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}
